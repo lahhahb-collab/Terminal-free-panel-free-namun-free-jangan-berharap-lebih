@@ -1,0 +1,9 @@
+{
+  "name": "termux-web-terminal",
+  "version": "1.0.0",
+  "main": "api/backend.js",
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.16.0"
+  }
+}
