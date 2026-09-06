@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termux Web Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #terminal-container {
+            flex: 1;
+            padding: 5px;
+            width: 100%;
+            height: calc(100vh - 40px);
+        }
+        #extra-keys {
+            display: flex;
+            background-color: #1a1a1a;
+            padding: 5px;
+            gap: 5px;
+            overflow-x: auto;
+            border-top: 1px solid #333;
+        }
+        .term-btn {
+            background-color: #2a2a2a;
+            color: #20c20e;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-family: monospace;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .term-btn:active {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="terminal-container"></div>
+
+    <div id="extra-keys">
+        <button class="term-btn" onclick="sendKey('ESC')">ESC</button>
+        <button class="term-btn" onclick="sendKey('CTRL')">CTRL</button>
+        <button class="term-btn" onclick="sendKey('TAB')">TAB</button>
+        <button class="term-btn" onclick="sendKey('ALT')">ALT</button>
+        <button class="term-btn" onclick="sendKey('-')">-</button>
+        <button class="term-btn" onclick="sendKey('DOWN')">↓</button>
+        <button class="term-btn" onclick="sendKey('UP')">↑</button>
+        <button class="term-btn" onclick="sendKey('LEFT')">←</button>
+        <button class="term-btn" onclick="sendKey('RIGHT')">→</button>
+    </div>
+
+    <script>
+        const term = new Terminal({
+            cursorBlink: true,
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff',
+                cursor: '#028200',
+                selectionBackground: '#5c5c5c',
+                black: '#000000',
+                green: '#028200',
+                brightGreen: '#20c20e'
+            },
+            fontFamily: 'Courier New, monospace',
+            fontSize: 14
+        });
+
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal-container'));
+        fitAddon.fit();
+
+        window.addEventListener('resize', () => fitAddon.fit());
+
+        // Connect WebSocket to real backend shell
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/api/backend`);
+
+        ws.onopen = () => {
+            term.write(' Welcome to Termux Web Terminal\r\n\r\n$ ');
+        };
+
+        ws.onmessage = (event) => {
+            term.write(event.data);
+        };
+
+        ws.onclose = () => {
+            term.write('\r\n\x1b[31m[Koneksi ke backend terputus]\x1b[0m\r\n');
+        };
+
+        term.onData((data) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(data);
+            }
+        });
+
+        function sendKey(key) {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            switch(key) {
+                case 'ESC': ws.send('\x1b'); break;
+                case 'CTRL': ws.send('\x03'); break;
+                case 'TAB': ws.send('\t'); break;
+                case 'UP': ws.send('\x1b[A'); break;
+                case 'DOWN': ws.send('\x1b[B'); break;
+                case 'LEFT': ws.send('\x1b[D'); break;
+                case 'RIGHT': ws.send('\x1b[C'); break;
+                default: ws.send(key); break;
+            }
+        }
+    </script>
+</body>
+</html>
