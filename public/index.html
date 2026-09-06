@@ -29,27 +29,30 @@
         }
         #extra-keys {
             display: flex;
-            background-color: #000000;
+            background-color: #0d0d0d;
             padding: 6px;
-            gap: 6px;
+            gap: 5px;
             overflow-x: auto;
             border-top: 1px solid #222;
+            white-space: nowrap;
         }
         .term-btn {
             background-color: #1c1c1c;
             color: #20c20e;
             border: 1px solid #333;
-            padding: 8px 14px;
-            font-size: 13px;
+            padding: 8px 12px;
+            font-size: 12px;
             font-family: monospace;
             border-radius: 4px;
             cursor: pointer;
             user-select: none;
             font-weight: bold;
+            min-width: 40px;
+            text-align: center;
         }
-        .term-btn:active {
-            background-color: #333;
-            color: #fff;
+        .term-btn:active, .term-btn.active {
+            background-color: #028200;
+            color: #ffffff;
         }
     </style>
 </head>
@@ -57,19 +60,26 @@
 
     <div id="terminal-container"></div>
 
+    <!-- Extra Keys Termux Lengkap -->
     <div id="extra-keys">
+        <button class="term-btn" id="ctrl-btn" onclick="toggleCtrl()">CTRL</button>
         <button class="term-btn" onclick="sendKey('\x1b')">ESC</button>
-        <button class="term-btn" onclick="sendKey('\x03')">CTRL+C</button>
         <button class="term-btn" onclick="sendKey('\t')">TAB</button>
+        <button class="term-btn" onclick="sendCtrlKey('c')">CTRL+C</button>
+        <button class="term-btn" onclick="sendCtrlKey('o')">CTRL+O</button>
+        <button class="term-btn" onclick="sendCtrlKey('x')">CTRL+X</button>
         <button class="term-btn" onclick="sendKey('\x1b[A')">↑</button>
         <button class="term-btn" onclick="sendKey('\x1b[B')">↓</button>
         <button class="term-btn" onclick="sendKey('\x1b[D')">←</button>
         <button class="term-btn" onclick="sendKey('\x1b[C')">→</button>
+        <button class="term-btn" onclick="sendKey('~')">~</button>
         <button class="term-btn" onclick="sendKey('-')">-</button>
         <button class="term-btn" onclick="sendKey('/')">/</button>
     </div>
 
     <script>
+        let ctrlActive = false;
+
         const term = new Terminal({
             cursorBlink: true,
             theme: {
@@ -90,13 +100,14 @@
         term.open(document.getElementById('terminal-container'));
         fitAddon.fit();
 
-        // Hubungkan WebSocket otomatis
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}`);
 
         ws.onopen = () => {
-            // Sampaikan ukuran layar terminal ke server
             ws.send(`RESIZE:${term.cols}:${term.rows}`);
+            
+            // Auto Restore File Sync dari LocalStorage saat koneksi terbuka
+            syncLocalFilesToServer();
         };
 
         ws.onmessage = (event) => {
@@ -107,9 +118,20 @@
             term.write('\r\n\x1b[31m[Koneksi Terminal Terputus]\x1b[0m\r\n');
         };
 
+        // Penanganan Input Keyboard & Modifikasi CTRL Modifier
         term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(data);
+                if (ctrlActive) {
+                    const charCode = data.charCodeAt(0);
+                    if (charCode >= 97 && charCode <= 122) { // a-z
+                        sendCtrlKey(data);
+                    } else {
+                        ws.send(data);
+                    }
+                    toggleCtrl(false); // Reset CTRL setelah ditekan
+                } else {
+                    ws.send(data);
+                }
             }
         });
 
@@ -120,11 +142,45 @@
             }
         });
 
+        // Fitur Tombol Termux & CTRL
+        function toggleCtrl(forceState) {
+            ctrlActive = forceState !== undefined ? forceState : !ctrlActive;
+            const btn = document.getElementById('ctrl-btn');
+            if (ctrlActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
         function sendKey(key) {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(key);
             }
         }
+
+        function sendCtrlKey(letter) {
+            if (ws.readyState === WebSocket.OPEN) {
+                const code = letter.toLowerCase().charCodeAt(0) - 96;
+                ws.send(String.fromCharCode(code));
+            }
+        }
+
+        // Auto Save LocalStorage System
+        function syncLocalFilesToServer() {
+            const savedFiles = JSON.parse(localStorage.getItem('termux_files') || '{}');
+            for (const [filename, content] of Object.entries(savedFiles)) {
+                // Tulis file secara otomatis ke server environment
+                ws.send(`cat << 'EOF' > ${filename}\n${content}\nEOF\n`);
+            }
+        }
+
+        // Menyimpan status ketikan ke LocalStorage saat keluar nano/simpan
+        window.saveFileToLocal = function(filename, content) {
+            const savedFiles = JSON.parse(localStorage.getItem('termux_files') || '{}');
+            savedFiles[filename] = content;
+            localStorage.setItem('termux_files', JSON.stringify(savedFiles));
+        };
     </script>
 </body>
 </html>
