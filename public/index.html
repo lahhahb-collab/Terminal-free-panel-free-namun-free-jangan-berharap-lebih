@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Termux Web Terminal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
@@ -16,7 +16,7 @@
         body {
             background-color: #000000;
             color: #ffffff;
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -24,30 +24,32 @@
         }
         #terminal-container {
             flex: 1;
-            padding: 5px;
+            padding: 4px;
             width: 100%;
-            height: calc(100vh - 40px);
         }
         #extra-keys {
             display: flex;
-            background-color: #1a1a1a;
-            padding: 5px;
-            gap: 5px;
+            background-color: #000000;
+            padding: 6px;
+            gap: 6px;
             overflow-x: auto;
-            border-top: 1px solid #333;
+            border-top: 1px solid #222;
         }
         .term-btn {
-            background-color: #2a2a2a;
+            background-color: #1c1c1c;
             color: #20c20e;
-            border: 1px solid #444;
-            padding: 6px 12px;
-            font-size: 12px;
+            border: 1px solid #333;
+            padding: 8px 14px;
+            font-size: 13px;
             font-family: monospace;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
+            user-select: none;
+            font-weight: bold;
         }
         .term-btn:active {
-            background-color: #444;
+            background-color: #333;
+            color: #fff;
         }
     </style>
 </head>
@@ -56,15 +58,15 @@
     <div id="terminal-container"></div>
 
     <div id="extra-keys">
-        <button class="term-btn" onclick="sendKey('ESC')">ESC</button>
-        <button class="term-btn" onclick="sendKey('CTRL')">CTRL</button>
-        <button class="term-btn" onclick="sendKey('TAB')">TAB</button>
-        <button class="term-btn" onclick="sendKey('ALT')">ALT</button>
+        <button class="term-btn" onclick="sendKey('\x1b')">ESC</button>
+        <button class="term-btn" onclick="sendKey('\x03')">CTRL+C</button>
+        <button class="term-btn" onclick="sendKey('\t')">TAB</button>
+        <button class="term-btn" onclick="sendKey('\x1b[A')">↑</button>
+        <button class="term-btn" onclick="sendKey('\x1b[B')">↓</button>
+        <button class="term-btn" onclick="sendKey('\x1b[D')">←</button>
+        <button class="term-btn" onclick="sendKey('\x1b[C')">→</button>
         <button class="term-btn" onclick="sendKey('-')">-</button>
-        <button class="term-btn" onclick="sendKey('DOWN')">↓</button>
-        <button class="term-btn" onclick="sendKey('UP')">↑</button>
-        <button class="term-btn" onclick="sendKey('LEFT')">←</button>
-        <button class="term-btn" onclick="sendKey('RIGHT')">→</button>
+        <button class="term-btn" onclick="sendKey('/')">/</button>
     </div>
 
     <script>
@@ -74,12 +76,12 @@
                 background: '#000000',
                 foreground: '#ffffff',
                 cursor: '#028200',
-                selectionBackground: '#5c5c5c',
+                selectionBackground: '#444444',
                 black: '#000000',
                 green: '#028200',
                 brightGreen: '#20c20e'
             },
-            fontFamily: 'Courier New, monospace',
+            fontFamily: 'monospace',
             fontSize: 14
         });
 
@@ -88,14 +90,13 @@
         term.open(document.getElementById('terminal-container'));
         fitAddon.fit();
 
-        window.addEventListener('resize', () => fitAddon.fit());
-
-        // Connect WebSocket to real backend shell
+        // Hubungkan WebSocket otomatis
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/backend`);
+        const ws = new WebSocket(`${protocol}//${window.location.host}`);
 
         ws.onopen = () => {
-            term.write(' Welcome to Termux Web Terminal\r\n\r\n$ ');
+            // Sampaikan ukuran layar terminal ke server
+            ws.send(`RESIZE:${term.cols}:${term.rows}`);
         };
 
         ws.onmessage = (event) => {
@@ -103,7 +104,7 @@
         };
 
         ws.onclose = () => {
-            term.write('\r\n\x1b[31m[Koneksi ke backend terputus]\x1b[0m\r\n');
+            term.write('\r\n\x1b[31m[Koneksi Terminal Terputus]\x1b[0m\r\n');
         };
 
         term.onData((data) => {
@@ -112,17 +113,16 @@
             }
         });
 
+        window.addEventListener('resize', () => {
+            fitAddon.fit();
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(`RESIZE:${term.cols}:${term.rows}`);
+            }
+        });
+
         function sendKey(key) {
-            if (ws.readyState !== WebSocket.OPEN) return;
-            switch(key) {
-                case 'ESC': ws.send('\x1b'); break;
-                case 'CTRL': ws.send('\x03'); break;
-                case 'TAB': ws.send('\t'); break;
-                case 'UP': ws.send('\x1b[A'); break;
-                case 'DOWN': ws.send('\x1b[B'); break;
-                case 'LEFT': ws.send('\x1b[D'); break;
-                case 'RIGHT': ws.send('\x1b[C'); break;
-                default: ws.send(key); break;
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(key);
             }
         }
     </script>
